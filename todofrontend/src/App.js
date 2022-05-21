@@ -45,6 +45,8 @@ function App() {
     const res = await fetch('http://localhost:8000/api/token/refresh/', {method: 'POST', mode: 'cors', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({'refresh': token.refresh})})
     const data = await res.json()
 
+    setToken({...data, "refresh": token.refresh})
+
     return data
   }
 
@@ -56,18 +58,29 @@ function App() {
   }
 
   const fetchTasks = async () => {
-    const res = await fetch('http://localhost:8000/api/tasks/', {method: 'GET', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`}})
-    const data = await res.json()
-
-    return data
+    let res = await fetch('http://localhost:8000/api/tasks/', {method: 'GET', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`}})
+    if (res.ok){
+      const data = await res.json()
+      return data
+    } else {
+      const newToken = await fetchRefreshToken()
+      res = await fetch('http://localhost:8000/api/tasks/', {method: 'GET', mode: 'cors', headers: {"Authorization": `Bearer ${newToken.access}`}})
+      const data = await res.json()
+      return data
+    }
   }
 
 
   // Add Task
   const addTask = async (task) => {
     const res = await fetch('http://localhost:8000/api/tasks/', {method: 'POST', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`, 'Content-Type': 'application/json'}, body: JSON.stringify({'task_name': task.text})})
-    const data = await res.json()
-    if (data.id) {
+    if (res.ok) {
+      const data = await res.json()
+      setTasks([...tasks, data])
+    } else {
+      const newToken = await fetchRefreshToken()
+      const res = await fetch('http://localhost:8000/api/tasks/', {method: 'POST', mode: 'cors', headers: {"Authorization": `Bearer ${newToken.access}`, 'Content-Type': 'application/json'}, body: JSON.stringify({'task_name': task.text})})
+      const data = await res.json()
       setTasks([...tasks, data])
     }
   }
@@ -75,9 +88,12 @@ function App() {
   // Delete Task
   const deleteTask = async (id) => {
     // send API delete request
-    const res = await fetch('http://localhost:8000/api/tasks/' + id + '/', {method: 'DELETE', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`}})
+    let res = await fetch('http://localhost:8000/api/tasks/' + id + '/', {method: 'DELETE', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`}})
     if (res.status === 204){
       setTasks(tasks.filter((task) => task.id !== id))
+    } else {
+      const newToken = await fetchRefreshToken()
+      res = await fetch('http://localhost:8000/api/tasks/' + id + '/', {method: 'DELETE', mode: 'cors', headers: {"Authorization": `Bearer ${newToken.access}`}})
     }
   }
 
@@ -85,7 +101,11 @@ function App() {
   const updateTask = async (id) => {
     // send API put request
     let task = tasks.find(task => task.id === id)
-    const res = await fetch('http://localhost:8000/api/tasks/' + id + '/', {method: 'PUT', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`, 'Content-Type': 'application/json'}, body: JSON.stringify({"completion": !task.completion})})
+    let res = await fetch('http://localhost:8000/api/tasks/' + id + '/', {method: 'PUT', mode: 'cors', headers: {"Authorization": `Bearer ${token.access}`, 'Content-Type': 'application/json'}, body: JSON.stringify({"completion": !task.completion})})
+    if (res.status === 401){
+      const newToken = await fetchRefreshToken()
+      res = await fetch('http://localhost:8000/api/tasks/' + id + '/', {method: 'PUT', mode: 'cors', headers: {"Authorization": `Bearer ${newToken.access}`, 'Content-Type': 'application/json'}, body: JSON.stringify({"completion": !task.completion})})
+    }
     const data = await res.json()
 
     setTasks(tasks.map((task) => {
